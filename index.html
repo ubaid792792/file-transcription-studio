@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>TranscribeLive — Browser Transcription</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0b0d12;--surface:#14171d;--surface2:#1c2128;--surface3:#262c35;--border:#2d3540;--text:#e4e7ed;--text2:#8b95a5;--text3:#5c6575;--accent:#6c5ce7;--accent2:#a29bfe;--accent3:#4834d4;--green:#00cec9;--orange:#fdcb6e;--red:#e17055;--blue:#74b9ff;--radius:12px;--radius-sm:8px;--radius-lg:16px;--shadow:0 8px 32px rgba(0,0,0,.45);--font:'Inter',system-ui,-apple-system,sans-serif;--transition:0.25s ease;--glass:rgba(255,255,255,.04)}
+[data-theme=light]{--bg:#f5f6fa;--surface:#fff;--surface2:#edeef3;--surface3:#dcdde1;--border:#d1d5db;--text:#1a1d23;--text2:#5c6575;--text3:#8b95a5;--glass:rgba(0,0,0,.03);--shadow:0 8px 32px rgba(0,0,0,.1)}
+html{font-size:15px}body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.hidden{display:none!important}
+.btn{cursor:pointer;border:none;font:inherit;border-radius:var(--radius-sm);transition:var(--transition);display:inline-flex;align-items:center;gap:8px;padding:10px 20px;font-size:.9rem;font-weight:500;user-select:none}
+.btn:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent3);transform:translateY(-1px);box-shadow:0 4px 16px rgba(108,92,231,.35)}
+.btn-primary:disabled{opacity:.5;pointer-events:none}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{background:var(--surface3)}
+.btn-sm{padding:6px 14px;font-size:.82rem}
+.btn-icon{padding:8px;min-width:36px;justify-content:center;background:transparent;color:var(--text2)}
+.btn-icon:hover{background:var(--glass);color:var(--text)}
+.spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent2);border-radius:50%;animation:spin .6s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Loading overlay — renders immediately (first in body) */
+.loading-overlay{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;transition:opacity .5s}
+.loading-overlay.done{opacity:0;pointer-events:none}
+.loading-logo{font-size:1.4rem;font-weight:700;margin-bottom:32px;display:flex;align-items:center;gap:10px}
+.loading-logo svg{width:32px;height:32px}
+.loading-step{width:100%;max-width:420px;margin-bottom:16px}
+.loading-step-label{display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:4px;color:var(--text2)}
+.loading-bar{height:4px;background:var(--surface3);border-radius:2px;overflow:hidden}
+.loading-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;transition:width .3s;width:0%}
+.loading-bar-fill.done{width:100%!important}
+.loading-status{font-size:.8rem;color:var(--text3);margin-top:8px;text-align:center}
+.loading-error{font-size:.82rem;color:var(--red);margin-top:12px;text-align:center;max-width:420px;display:none}
+.loading-retry{margin-top:12px}
+
+/* Header */
+.header{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:100}
+.header-brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.1rem}
+.header-brand svg{width:26px;height:26px}
+.header-info{display:flex;align-items:center;gap:8px}
+
+/* Main */
+.main{max-width:1100px;margin:0 auto;padding:20px 24px 80px;display:flex;flex-direction:column;gap:20px}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px}
+.card-title{font-size:.95rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.card-sub{font-size:.8rem;color:var(--text2);margin-bottom:12px}
+
+/* Dropzone */
+.dropzone{position:relative;border:2px dashed var(--border);border-radius:var(--radius-lg);padding:36px 20px;text-align:center;cursor:pointer;transition:var(--transition);background:var(--glass)}
+.dropzone:hover,.dropzone.dragover{border-color:var(--accent);background:rgba(108,92,231,.06)}
+.dropzone-icon{fill:var(--text3);width:40px;height:40px;margin-bottom:8px}
+.dropzone-title{font-size:1rem;font-weight:600;margin-bottom:2px}
+.dropzone-sub{font-size:.82rem;color:var(--text2)}
+.dropzone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+
+/* File row */
+.file-row{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:10px}
+.file-row-info{flex:1;min-width:0}
+.file-row-name{font-size:.88rem;font-weight:500}
+.file-row-meta{font-size:.74rem;color:var(--text3)}
+.file-row-status{font-size:.75rem;font-weight:500}
+.file-row-status.ready{color:var(--text2)}
+.file-row-status.done{color:var(--green)}
+.file-row-status.error{color:var(--red)}
+
+/* Media player */
+.media-card{padding:0;overflow:hidden}
+.media-video{width:100%;max-height:420px;display:block;background:#000;cursor:pointer}
+.media-controls{display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--surface2);border-top:1px solid var(--border);flex-wrap:wrap}
+.media-time{font-size:.76rem;color:var(--text2);font-variant-numeric:tabular-nums;white-space:nowrap;min-width:90px}
+.media-slider{flex:1;min-width:60px;height:4px;-webkit-appearance:none;appearance:none;background:var(--border);border-radius:2px;outline:none;cursor:pointer}
+.media-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent2);cursor:pointer;border:2px solid var(--surface)}
+.media-slider::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--accent2);cursor:pointer;border:2px solid var(--surface)}
+.media-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;color:var(--text3);text-align:center;gap:8px}
+.media-empty svg{width:40px;height:40px;fill:var(--text3);opacity:.4}
+
+/* Progress */
+.progress-wrap{margin-top:10px}
+.progress-bar{height:4px;background:var(--surface3);border-radius:2px;overflow:hidden;margin-bottom:4px}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;transition:width .3s;width:0%}
+.progress-row{display:flex;justify-content:space-between;font-size:.76rem;color:var(--text2)}
+.progress-fill.indet{width:25%;animation:indet 1.4s infinite ease-in-out}
+@keyframes indet{0%{transform:translateX(-100%)}100%{transform:translateX(500%)}}
+
+/* Status log */
+.status-log{background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;max-height:120px;overflow-y:auto;font-size:.76rem;font-family:'SF Mono',monospace;line-height:1.7}
+.status-log .le{display:flex;gap:8px;color:var(--text2)}
+.status-log .lt{color:var(--text3);flex-shrink:0}
+.status-log .lm.success{color:var(--green)}.status-log .lm.error{color:var(--red)}.status-log .lm.warn{color:var(--orange)}.status-log .lm.info{color:var(--blue)}.status-log .lm.accent{color:var(--accent2)}
+
+/* Transcript */
+.transcript-toolbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm) var(--radius-sm) 0 0;flex-wrap:wrap}
+.transcript-toolbar .sep{width:1px;height:18px;background:var(--border);margin:0 2px}
+.transcript-area{width:100%;min-height:260px;padding:14px;background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius-sm) var(--radius-sm);font-family:var(--font);font-size:.9rem;color:var(--text);resize:vertical;outline:none;line-height:1.75}
+.transcript-area:focus{border-color:var(--accent)}
+.transcript-area::placeholder{color:var(--text3)}
+.transcript-area:disabled{opacity:.7;cursor:default}
+
+/* Live segments */
+.live-segments{display:flex;flex-direction:column;gap:2px;margin-top:10px;max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px}
+.live-segments:empty{display:none}
+.segment{display:flex;gap:10px;padding:6px 8px;border-radius:6px;transition:var(--transition);cursor:pointer}
+.segment:hover{background:var(--surface2)}
+.segment.active{background:rgba(108,92,231,.15);border-left:2px solid var(--accent2)}
+.segment-ts{color:var(--accent2);font-weight:500;font-size:.78rem;flex-shrink:0;padding-top:1px;min-width:70px}
+.segment-text{color:var(--text);font-size:.85rem;line-height:1.5}
+
+/* Stats */
+.stats{display:flex;gap:4px 16px;flex-wrap:wrap;font-size:.78rem;color:var(--text3);margin-top:6px}
+
+/* Export */
+.export-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm)}
+.export-bar .btn{font-size:.8rem;padding:6px 14px}
+.export-label{font-size:.78rem;color:var(--text3);margin-right:4px}
+
+/* Toast */
+.toast-container{position:fixed;bottom:20px;right:20px;z-index:9998;display:flex;flex-direction:column;gap:6px;max-width:360px}
+.toast{padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow);font-size:.83rem;display:flex;align-items:center;gap:8px;animation:ti .25s ease;border-left:3px solid var(--blue)}
+.toast.success{border-left-color:var(--green)}.toast.error{border-left-color:var(--red)}.toast.info{border-left-color:var(--blue)}
+@keyframes ti{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+
+/* Settings */
+.setting-row{display:flex;align-items:center;gap:12px;padding:8px 0;flex-wrap:wrap}
+.setting-row select{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;color:var(--text);font:inherit;font-size:.82rem;outline:none}
+.setting-row select:focus{border-color:var(--accent)}
+.setting-label{font-size:.82rem;color:var(--text2)}
+.toggle{position:relative;width:38px;height:20px;flex-shrink:0;cursor:pointer;display:inline-block}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;inset:0;background:var(--surface3);border-radius:10px;transition:var(--transition)}
+.toggle-slider::before{content:'';position:absolute;width:14px;height:14px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:var(--transition)}
+.toggle input:checked+.toggle-slider{background:var(--accent)}
+.toggle input:checked+.toggle-slider::before{transform:translateX(18px)}
+
+/* Live badge */
+.live-badge{display:inline-flex;align-items:center;gap:4px;font-size:.7rem;font-weight:600;color:var(--green);padding:2px 8px;border-radius:10px;background:rgba(0,206,201,.1);border:1px solid rgba(0,206,201,.25)}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 1.2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+@media(max-width:640px){
+  .main{padding:12px 12px 80px}.header{padding:10px 12px}
+  .media-controls{gap:4px;padding:6px 10px}.media-time{min-width:60px;font-size:.7rem}
+  .segment-ts{min-width:55px;font-size:.72rem}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== LOADING OVERLAY (renders immediately — no script blocking) ===== -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-logo">
+    <svg viewBox="0 0 28 28" fill="none"><rect x="2" y="2" width="24" height="24" rx="8" fill="var(--accent)"/><path d="M10 8v12M14 11v6M18 6v16" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>
+    Transcribe<span style="color:var(--accent2)">Live</span>
+  </div>
+  <div class="loading-step">
+    <div class="loading-step-label"><span id="lbl1">Loading engine...</span><span id="pct1">0%</span></div>
+    <div class="loading-bar"><div class="loading-bar-fill" id="bar1"></div></div>
+  </div>
+  <div class="loading-step" id="step2wrap">
+    <div class="loading-step-label"><span id="lbl2">Downloading Whisper model...</span><span id="pct2">0%</span></div>
+    <div class="loading-bar"><div class="loading-bar-fill" id="bar2"></div></div>
+  </div>
+  <div class="loading-status" id="loadStatus">Starting...</div>
+  <div class="loading-error" id="loadError"></div>
+  <button class="btn btn-primary loading-retry hidden" id="retryBtn" onclick="location.reload()">Retry</button>
+</div>
+
+<!-- ===== HEADER ===== -->
+<header class="header">
+  <div class="header-brand">
+    <svg viewBox="0 0 28 28" fill="none"><rect x="2" y="2" width="24" height="24" rx="8" fill="var(--accent)"/><path d="M10 8v12M14 11v6M18 6v16" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>
+    Transcribe<span style="color:var(--accent2)">Live</span>
+  </div>
+  <div class="header-info">
+    <span style="font-size:.75rem;color:var(--text3)" id="modelStatus">Starting...</span>
+    <button class="btn-icon" id="themeToggle" aria-label="Theme" style="padding:6px">
+      <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 3a9 9 0 109 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 01-4.4 2.26 5.403 5.403 0 01-3.14-9.8c-.44-.06-.9-.1-1.36-.1z" fill="currentColor"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- ===== MAIN APP ===== -->
+<div class="main" id="appMain">
+  <div class="card">
+    <div class="card-title">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Upload Media
+    </div>
+    <div class="card-sub">Drag & drop or click. Supports audio (MP3, WAV, M4A, FLAC, OGG) and video (MP4, MOV, MKV, WEBM)</div>
+    <div class="dropzone" id="dropzone">
+      <svg class="dropzone-icon" viewBox="0 0 40 40"><path d="M20 5v20M10 15l10-10 10 10M6 30v4a4 4 0 004 4h20a4 4 0 004-4v-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="dropzone-title">Drop file here or click to browse</div>
+      <div class="dropzone-sub">Max 500MB</div>
+      <input type="file" id="fileInput" accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.flac,.ogg,.mp4,.mov,.mkv,.webm,.avi">
+    </div>
+    <div id="fileQueue"></div>
+  </div>
+
+  <div class="card" style="padding:12px 20px">
+    <div class="setting-row">
+      <span class="setting-label">Model:</span>
+      <select id="modelSelect">
+        <option value="tiny">Tiny (fast)</option>
+        <option value="base" selected>Base (recommended)</option>
+        <option value="small">Small (balanced)</option>
+        <option value="medium">Medium (accurate)</option>
+      </select>
+      <span class="setting-label">Language:</span>
+      <select id="langSelect">
+        <option value="">Auto-detect</option>
+        <option value="en">English</option><option value="es">Spanish</option><option value="fr">French</option>
+        <option value="de">German</option><option value="zh">Chinese</option><option value="ja">Japanese</option>
+        <option value="ko">Korean</option><option value="pt">Portuguese</option><option value="ru">Russian</option>
+      </select>
+      <span class="setting-label">GPU:</span>
+      <label class="toggle"><input type="checkbox" id="gpuToggle" checked><span class="toggle-slider"></span></label>
+    </div>
+  </div>
+
+  <div class="card media-card" id="mediaCard">
+    <div class="media-empty" id="mediaEmpty">
+      <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>
+      <div>Upload a file to begin</div>
+    </div>
+    <div id="mediaPlayerWrap" class="hidden">
+      <video id="mediaVideo" class="media-video" playsinline></video>
+      <div class="media-controls">
+        <button class="btn-icon" id="playBtn" aria-label="Play/pause" style="padding:6px">
+          <svg viewBox="0 0 24 24" width="18" height="18" id="playIcon"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>
+        </button>
+        <span class="media-time"><span id="currentTime">0:00</span> / <span id="totalTime">0:00</span></span>
+        <input type="range" class="media-slider" id="seekSlider" min="0" max="100" value="0" aria-label="Seek">
+        <label style="font-size:.72rem;color:var(--text3)">Speed:</label>
+        <select id="speedSelect" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 6px;color:var(--text2);font:inherit;font-size:.75rem;outline:none">
+          <option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option>
+          <option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option>
+        </select>
+        <div style="flex:1"></div>
+        <span style="font-size:.7rem;color:var(--text3)" id="formatTag"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div>
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+          Transcription
+          <span class="live-badge hidden" id="liveBadge"><span class="live-dot"></span> LIVE</span>
+        </div>
+        <div class="card-sub" id="transcribeSub">Upload a file and press Start</div>
+      </div>
+      <button class="btn btn-primary" id="startBtn" disabled>
+        <svg viewBox="0 0 24 24" width="15" height="15"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>
+        <span>Start</span>
+      </button>
+    </div>
+    <div class="progress-wrap hidden" id="progressWrap">
+      <div class="progress-bar"><div class="progress-fill" id="progressBar"></div></div>
+      <div class="progress-row"><span id="progressLabel">Processing...</span><span id="progressPct">0%</span></div>
+    </div>
+    <div class="status-log" id="statusLog" style="margin-top:10px">
+      <div class="le"><span class="lt">—</span><span class="lm">Ready</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Live Transcript
+    </div>
+    <div class="transcript-toolbar">
+      <button class="btn-icon" id="copyBtn" style="padding:4px 8px;font-size:.75rem;color:var(--text2);gap:4px">
+        <svg viewBox="0 0 24 24" width="14" height="14"><rect x="9" y="9" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        Copy
+      </button>
+      <div class="sep"></div>
+      <button class="btn-icon" id="clearBtn" style="padding:4px 8px;font-size:.75rem;color:var(--text2);gap:4px">
+        <svg viewBox="0 0 24 24" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2"/><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2"/></svg>
+        Clear
+      </button>
+      <div class="sep"></div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:.75rem;color:var(--text2)">
+        <svg viewBox="0 0 24 24" width="13" height="13"><circle cx="11" cy="11" r="8" fill="none" stroke="currentColor" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        <input type="text" id="searchInput" placeholder="Search..." style="background:none;border:none;outline:none;color:var(--text);font:inherit;font-size:.75rem;width:120px">
+      </div>
+    </div>
+    <textarea class="transcript-area" id="transcriptArea" placeholder="Transcribed text will appear here in real-time..." disabled spellcheck="true"></textarea>
+    <div class="live-segments" id="liveSegments"></div>
+    <div class="stats">
+      <span id="statWords">0 words</span>
+      <span id="statChars">0 chars</span>
+      <span id="statSegs">0 segments</span>
+      <span id="statDuration"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export
+    </div>
+    <div class="export-bar">
+      <span class="export-label">Format:</span>
+      <button class="btn btn-secondary btn-sm" data-fmt="txt">.TXT</button>
+      <button class="btn btn-secondary btn-sm" data-fmt="srt">.SRT</button>
+      <button class="btn btn-secondary btn-sm" data-fmt="vtt">.VTT</button>
+      <button class="btn btn-secondary btn-sm" data-fmt="json">.JSON</button>
+      <button class="btn btn-secondary btn-sm" data-fmt="pdf">.PDF</button>
+      <div class="sep" style="width:1px;height:20px;background:var(--border);margin:0 4px"></div>
+      <label style="display:flex;align-items:center;gap:4px;font-size:.78rem;color:var(--text2);cursor:pointer">
+        <input type="checkbox" id="tsToggle" checked style="accent-color:var(--accent)"> Timestamps
+      </label>
+    </div>
+  </div>
+</div>
+
+<!-- TOASTS -->
+<div class="toast-container" id="toastContainer" role="alert" aria-live="polite"></div>
+
+<!-- ===== MAIN APPLICATION SCRIPT ===== -->
+<script>
+(function(){
+'use strict';
+
+const $=id=>document.getElementById(id);
+
+// ===== LOCAL STORAGE =====
+function store(k,v){
+  try{if(v===undefined)return JSON.parse(localStorage.getItem(k));localStorage.setItem(k,JSON.stringify(v));}catch(e){}
+}
+function sv(k,d){const v=store(k);return v!==null&&v!==undefined?v:d;}
+
+// ===== TOAST =====
+function toast(msg,type,dur){
+  dur=dur||4000;const c=$('toastContainer');if(!c)return;
+  const t=document.createElement('div');t.className='toast '+type;
+  t.innerHTML='<span style="font-weight:700;flex-shrink:0">'+(type==='error'?'\u2715':type==='success'?'\u2713':'\u2139')+'</span><span>'+msg+'</span>';
+  c.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transform='translateY(-8px)';t.style.transition='.25s';setTimeout(()=>t.remove(),300);},dur);
+}
+
+// ===== STATUS LOG =====
+function slog(msg,type){
+  type=type||'info';const el=$('statusLog');if(!el)return;
+  const d=document.createElement('div');d.className='le';
+  d.innerHTML='<span class="lt">'+new Date().toLocaleTimeString()+'</span><span class="lm '+type+'">'+msg+'</span>';
+  el.appendChild(d);el.scrollTop=el.scrollHeight;
+}
+
+// ===== LOADING OVERLAY CONTROL =====
+const LO={bar1:$('bar1'),pct1:$('pct1'),lbl1:$('lbl1'),bar2:$('bar2'),pct2:$('pct2'),lbl2:$('lbl2'),st:$('loadStatus'),err:$('loadError'),retry:$('retryBtn')};
+function lup(p1,t1,p2,t2,s){
+  if(p1!==undefined){LO.bar1.style.width=p1+'%';LO.pct1.textContent=p1+'%';if(t1)LO.lbl1.textContent=t1;}
+  if(p2!==undefined){LO.bar2.style.width=p2+'%';LO.pct2.textContent=p2+'%';if(t2)LO.lbl2.textContent=t2;}
+  if(s)LO.st.textContent=s;
+}
+function lerr(msg){
+  LO.err.style.display='block';LO.err.textContent='\u26A0 '+msg;LO.retry.classList.remove('hidden');LO.st.textContent='Failed';
+}
+
+// ===== THEME =====
+function themeSet(t){
+  if(t==='system')t=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+  document.documentElement.setAttribute('data-theme',t);store('ts-theme',t);
+}
+themeSet(sv('ts-theme','dark'));
+$('themeToggle').onclick=()=>{themeSet(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');};
+
+// ===== SETTINGS =====
+const ms=$('modelSelect'),ls=$('langSelect'),gt=$('gpuToggle');
+ms.value=sv('ts-model','base');ls.value=sv('ts-lang','');gt.checked=sv('ts-gpu',true);
+ms.onchange=()=>store('ts-model',ms.value);
+ls.onchange=()=>store('ts-lang',ls.value);
+gt.onchange=()=>store('ts-gpu',gt.checked);
+
+// ===== STATE =====
+const state={file:null,fileName:'',fileSize:0,isVideo:false,audioBlob:null,audioDuration:0,transcript:'',segments:[],transcribing:false,audioData:null,sampleRate:16000};
+let pipeline=null;
+
+// ===== LOAD TRANSFORMERS.JS VIA import() =====
+// The library is an ES module (webpack bundle) — not a UMD global.
+// import() works in Chrome/Edge from file://.
+// For Firefox/Safari, fallback to dynamic <script type="module">.
+async function loadTransformersJS(){
+  const urls=[
+    'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2',
+    'https://unpkg.com/@xenova/transformers@2.17.2',
+  ];
+  let lastErr;
+  // Strategy 1: dynamic import()
+  for(const url of urls){
+    try{
+      const mod=await import(url);
+      // Verify the module has pipeline
+      if(mod && typeof mod.pipeline==='function'){
+        return mod;
+      }
+      // Try default export
+      if(mod.default && typeof mod.default.pipeline==='function'){
+        return mod.default;
+      }
+    }catch(e){lastErr=e;continue;}
+  }
+  // Strategy 2: inject <script type="module"> (works in Firefox from file://)
+  for(const url of urls){
+    try{
+      const mod=await new Promise((resolve,reject)=>{
+        const s=document.createElement('script');
+        s.type='module';
+        s.textContent=`
+          import * as TX from ${JSON.stringify(url)};
+          window.__TX_MODULE__ = TX;
+          window.__TX_LOADED__ = true;
+        `;
+        s.onerror=()=>reject(new Error('Module script failed'));
+        document.head.appendChild(s);
+        // Poll for the global
+        let attempts=0;
+        const iv=setInterval(()=>{
+          if(window.__TX_LOADED__){clearInterval(iv);resolve(window.__TX_MODULE__);}
+          if(++attempts>100){clearInterval(iv);reject(new Error('Timed out'));}
+        },100);
+      });
+      if(mod && typeof mod.pipeline==='function') return mod;
+      if(mod && mod.default && typeof mod.default.pipeline==='function') return mod.default;
+    }catch(e){lastErr=e;continue;}
+  }
+  throw lastErr||new Error('All loading strategies failed');
+}
+
+// ===== LOAD MODEL ON PAGE OPEN =====
+async function initLoad(){
+  lup(5,'Loading Transformers.js...',0,'Waiting...','Connecting to CDN...');
+  let TX;
+  try{
+    TX=await loadTransformersJS();
+  }catch(e){
+    lerr('Could not load transcription engine: '+e.message+'. Try Chrome or Edge, or check your internet.');
+    $('modelStatus').textContent='Load Error';
+    return;
+  }
+  window.TransformersJS=TX;
+  lup(100,'Transformers.js loaded \u2713',0,'','Engine ready');
+  slog('Transformers.js loaded','success');
+
+  // Step 2: download Whisper model
+  const mm={tiny:'Xenova/whisper-tiny',base:'Xenova/whisper-base',small:'Xenova/whisper-small',medium:'Xenova/whisper-medium'};
+  const mid=ms.value,mn=mm[mid]||mm.base;
+  lup(100,'Transformers.js loaded \u2713',2,'Downloading Whisper '+mid+'...','Downloading speech-to-text model...');
+  try{
+    pipeline=await TX.pipeline('automatic-speech-recognition',mn,{
+      quantized:true,
+      progress_callback:p=>{
+        if(p.status==='progress'){
+          const pct=Math.round((p.loaded/p.total)*100);
+          const mb=(p.loaded/1024/1024).toFixed(1),tmb=(p.total/1024/1024).toFixed(1);
+          lup(100,'Transformers.js loaded \u2713',pct,'Downloading '+mid+'... '+mb+'/'+tmb+'MB','Downloading: '+mb+'MB / '+tmb+'MB');
+        }else if(p.status==='done'){
+          lup(100,'Transformers.js loaded \u2713',100,'Whisper '+mid+' ready \u2713','Ready!');
+        }else if(p.status==='initiate'){
+          lup(100,'Transformers.js loaded \u2713',0,'Initializing model...');
+        }
+      },
+    });
+    lup(100,'Transformers.js loaded \u2713',100,'Whisper '+mid+' ready \u2713','Ready');
+    slog('Whisper '+mid+' model loaded','success');
+    $('modelStatus').textContent='Whisper '+mid+' \u00b7 ready';
+  }catch(e){
+    lerr('Whisper model download failed: '+e.message+'. Check your internet and refresh.');
+    $('modelStatus').textContent='Model Error';
+    slog('Model load: '+e.message,'error');
+    return;
+  }
+
+  // Hide overlay
+  $('loadingOverlay').classList.add('done');
+  setTimeout(()=>$('loadingOverlay').classList.add('hidden'),600);
+  slog('Ready','success');
+  toast('Ready. Upload a file to start.','info',3000);
+}
+initLoad().catch(e=>{lerr(e.message);$('modelStatus').textContent='Error';});
+
+// ===== DROPZONE =====
+const dz=$('dropzone'),fi=$('fileInput'),fq=$('fileQueue');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dragover');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('dragover'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('dragover');hf(e.dataTransfer.files[0]);});
+fi.addEventListener('change',e=>{hf(e.target.files[0]);e.target.value='';});
+
+function hf(f){
+  if(!f)return;
+  if(state.transcribing){toast('Already transcribing','error');return;}
+  if(f.size>500*1024*1024){toast('File exceeds 500MB','error');return;}
+  const iv=f.type.startsWith('video/');
+  const ext=f.name.split('.').pop().toLowerCase();
+  const va=['mp3','wav','m4a','aac','flac','ogg','opus'],vv=['mp4','mov','mkv','webm','avi'];
+  if(!iv&&!va.includes(ext)&&!f.type.startsWith('audio/')){toast('Unsupported format','error');return;}
+
+  state.file=f;state.fileName=f.name;state.fileSize=f.size;state.isVideo=iv;
+  state.audioBlob=null;state.audioDuration=0;state.transcript='';state.segments=[];state.audioData=null;
+
+  fq.innerHTML='<div class="file-row"><svg width="18" height="18" fill="var(--text2)" viewBox="0 0 24 24"><path d="'+(iv?'M8 5v14l11-7z':'M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z')+'"/></svg><div class="file-row-info"><div class="file-row-name">'+esc(f.name)+'</div><div class="file-row-meta">'+fmtSize(f.size)+(iv?' \u00b7 Video':' \u00b7 Audio')+'</div></div><span class="file-row-status ready">Ready</span></div>';
+  loadMedia(f);
+  $('startBtn').disabled=false;
+  $('transcribeSub').textContent=f.name+' \u2014 ready to transcribe';
+  slog('Loaded: '+f.name,'success');
+}
+function fmtSize(b){if(!b)return'0 B';const u=['B','KB','MB','GB'];let i=0,s=b;while(s>=1024&&i<3){s/=1024;i++;}return s.toFixed(i>0?1:0)+' '+u[i];}
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+
+// ===== MEDIA PLAYER =====
+const vid=$('mediaVideo'),mt=$('mediaEmpty'),mw=$('mediaPlayerWrap'),pb=$('playBtn'),pi=$('playIcon');
+const ct=$('currentTime'),tt=$('totalTime'),sk=$('seekSlider'),sp=$('speedSelect'),ft=$('formatTag');
+
+function loadMedia(f){
+  vid.src=URL.createObjectURL(f);vid.load();
+  mt.classList.add('hidden');mw.classList.remove('hidden');
+  sk.value=0;ct.textContent='0:00';tt.textContent='0:00';
+  ft.textContent=f.name.split('.').pop().toUpperCase();
+  $('transcriptArea').value='';$('liveSegments').innerHTML='';ustat();
+}
+vid.addEventListener('loadedmetadata',()=>{tt.textContent=fmtTime(vid.duration);sk.max=Math.floor(vid.duration)||100;});
+vid.addEventListener('timeupdate',()=>{const t=vid.currentTime;ct.textContent=fmtTime(t);if(vid.duration)sk.value=(t/vid.duration)*100;hlseg(t);});
+vid.addEventListener('play',()=>{pi.innerHTML='<rect x="6" y="4" width="4" height="16" fill="currentColor"/><rect x="14" y="4" width="4" height="16" fill="currentColor"/>';});
+vid.addEventListener('pause',()=>{pi.innerHTML='<polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/>';});
+pb.onclick=()=>{if(vid.paused)vid.play();else vid.pause();};
+sk.addEventListener('input',()=>{if(!vid.duration)return;const t=(sk.value/100)*vid.duration;vid.currentTime=t;ct.textContent=fmtTime(t);});
+sp.onchange=()=>{vid.playbackRate=parseFloat(sp.value);};
+function fmtTime(s){if(!s||isNaN(s))return'0:00';const m=Math.floor(s/60),sec=Math.floor(s%60);return m+':'+sec.toString().padStart(2,'0');}
+
+// ===== TRANSCRIPTION =====
+const sb=$('startBtn'),pw=$('progressWrap'),pbar=$('progressBar'),plbl=$('progressLabel'),ppct=$('progressPct');
+
+sb.onclick=startTx;
+
+async function startTx(){
+  if(!state.file){toast('No file','error');return;}
+  if(state.transcribing){toast('Already transcribing','error');return;}
+  if(!pipeline){toast('Model not loaded','error',5000);return;}
+
+  state.transcribing=true;state.transcript='';state.segments=[];
+  sb.disabled=true;sb.innerHTML='<span class="spinner"></span> Transcribing...';
+  pw.classList.remove('hidden');pbar.className='progress-fill indet';
+  $('liveBadge').classList.remove('hidden');
+  $('transcriptArea').value='';$('transcriptArea').disabled=false;$('liveSegments').innerHTML='';
+  $('statusLog').innerHTML='<div class="le"><span class="lt">\u2014</span><span class="lm">Ready</span></div>';
+  ustat();
+
+  // Extract audio if video
+  let blob=state.audioBlob;
+  if(!blob&&state.isVideo){
+    slog('Extracting audio from video...','info');
+    blob=await extractAudio(state.file);
+    if(!blob){txFail('Audio extraction failed');return;}
+    state.audioBlob=blob;
+  }else if(!blob){blob=state.file;}
+
+  // Decode to Float32Array
+  slog('Decoding audio...','info');
+  try{
+    const r=await decodeAudio(blob);
+    state.audioData=r.data;state.sampleRate=r.sr;state.audioDuration=r.dur;
+    slog('Audio: '+fmtTime(r.dur),'success');
+  }catch(e){txFail('Audio decode: '+e.message);return;}
+
+  // Start playback + transcribe chunks
+  vid.currentTime=0;await vid.play();
+  slog('Transcribing...','accent');
+  await procChunks();
+
+  state.transcribing=false;
+  sb.disabled=false;sb.innerHTML='<svg viewBox="0 0 24 24" width="15" height="15"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg> <span>Re-transcribe</span>';
+  pw.classList.add('hidden');$('liveBadge').classList.add('hidden');
+  slog('Complete!','success');toast('Transcription complete','success');
+}
+function txFail(m){
+  state.transcribing=false;sb.disabled=false;
+  sb.innerHTML='<svg viewBox="0 0 24 24" width="15" height="15"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg> <span>Retry</span>';
+  pw.classList.add('hidden');$('liveBadge').classList.add('hidden');slog(m,'error');toast(m,'error');
+}
+
+// ===== AUDIO EXTRACTION =====
+async function extractAudio(f){
+  try{
+    const url=URL.createObjectURL(f),resp=await fetch(url),ab=await resp.arrayBuffer();URL.revokeObjectURL(url);
+    const ctx=new(window.AudioContext||window.webkitAudioContext)(),buf=await ctx.decodeAudioData(ab);ctx.close();
+    const wav=ab2wav(buf);
+    slog('Extracted: '+fmtTime(buf.duration),'success');return wav;
+  }catch(e){slog('Extraction: '+e.message,'error');return null;}
+}
+function ab2wav(buf){
+  const sr=buf.sampleRate,data=buf.getChannelData(0),dl=data.length*2,bl=44+dl;
+  const ab=new ArrayBuffer(bl),v=new DataView(ab);
+  const ws=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
+  ws(0,'RIFF');v.setUint32(4,bl-8,true);ws(8,'WAVE');ws(12,'fmt ');
+  v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);
+  ws(36,'data');v.setUint32(40,dl,true);
+  let off=44;
+  for(let i=0;i<data.length;i++){const s=Math.max(-1,Math.min(1,data[i]));v.setInt16(off,s<0?s*0x8000:s*0x7FFF,true);off+=2;}
+  return new Blob([ab],{type:'audio/wav'});
+}
+async function decodeAudio(b){
+  const ab=await b.arrayBuffer(),ctx=new(window.AudioContext||window.webkitAudioContext)(),buf=await ctx.decodeAudioData(ab);ctx.close();
+  const sr=buf.sampleRate,len=buf.length,mono=new Float32Array(len);
+  if(buf.numberOfChannels>1){for(let i=0;i<len;i++){let s=0;for(let c=0;c<buf.numberOfChannels;c++)s+=buf.getChannelData(c)[i];mono[i]=s/buf.numberOfChannels;}}
+  else{mono.set(buf.getChannelData(0));}
+  return{data:mono,sr:sr,dur:len/sr};
+}
+
+// ===== CHUNKED TRANSCRIPTION =====
+async function procChunks(){
+  const data=state.audioData,sr=state.sampleRate,cs=30,cl=cs*sr,total=Math.ceil(data.length/cl);
+  slog(total+' chunks of '+cs+'s','info');pbar.className='progress-fill';
+  for(let c=0;c<total;c++){
+    const st=c*cl,en=Math.min(st+cl,data.length),chunk=data.slice(st,en);
+    const pct=Math.round(((c+1)/total)*100);
+    pbar.style.width=pct+'%';plbl.textContent='Chunk '+(c+1)+'/'+total+' ('+fmtTime(st/sr)+')';ppct.textContent=pct+'%';
+    slog('Chunk '+(c+1)+' @ '+fmtTime(st/sr),'info');
+    let r;
+    try{r=await runModel(chunk,sr);}catch(e){slog('Chunk '+(c+1)+': '+e.message,'warn');continue;}
+    if(r&&r.text){
+      const t=r.text.trim();
+      if(t){
+        const seg={start:st/sr,end:Math.min(st/sr+cs,state.audioDuration),text:t};
+        state.segments.push(seg);state.transcript+=(state.transcript?' ':'')+t;
+        $('transcriptArea').value=state.transcript;
+        $('transcriptArea').scrollTop=$('transcriptArea').scrollHeight;
+        addSeg(seg,state.segments.length-1);ustat();
+      }
+    }
+    await new Promise(r=>setTimeout(r,5));
+  }
+}
+async function runModel(data,sr){
+  let input=data;
+  if(sr!==16000){const r=16000/sr,nl=Math.round(data.length*r),res=new Float32Array(nl);for(let i=0;i<nl;i++)res[i]=data[Math.min(Math.floor(i/r),data.length-1)];input=res;}
+  const ug=gt.checked;
+  try{return await pipeline(input,{language:ls.value||undefined,task:'transcribe',return_timestamps:false,chunk_length_s:30,stride_length_s:4,device:ug?'webgpu':'cpu'});}
+  catch(e){slog('GPU fallback CPU','warn');return await pipeline(input,{language:ls.value||undefined,task:'transcribe',return_timestamps:false,chunk_length_s:30,stride_length_s:4,device:'cpu'});}
+}
+let la=-1;
+function addSeg(seg,idx){
+  const d=document.createElement('div');d.className='segment';
+  d.dataset.start=seg.start;d.dataset.end=seg.end;
+  d.innerHTML='<span class="segment-ts">'+fmtTime(seg.start)+'</span><span class="segment-text">'+esc(seg.text)+'</span>';
+  d.onclick=()=>{vid.currentTime=seg.start;vid.play();};
+  $('liveSegments').appendChild(d);$('liveSegments').scrollTop=$('liveSegments').scrollHeight;
+}
+function hlseg(t){
+  const segs=$('liveSegments').querySelectorAll('.segment');let idx=-1;
+  for(let i=segs.length-1;i>=0;i--){const s=parseFloat(segs[i].dataset.start),e=parseFloat(segs[i].dataset.end);if(t>=s&&t<=e){idx=i;break;}}
+  if(idx!==la){segs.forEach(s=>s.classList.remove('active'));if(idx>=0&&segs[idx])segs[idx].classList.add('active');la=idx;}
+}
+
+// ===== STATS =====
+function ustat(){
+  const t=state.transcript||'',w=t.trim()?t.trim().split(/\s+/).length:0;
+  $('statWords').textContent=w+' words';$('statChars').textContent=t.length+' chars';
+  $('statSegs').textContent=state.segments.length+' segments';
+  $('statDuration').textContent=state.audioDuration?' \u00b7 '+fmtTime(state.audioDuration):'';
+}
+
+// ===== COPY / CLEAR / SEARCH =====
+$('copyBtn').onclick=()=>{
+  if(!state.transcript){toast('Nothing to copy','info');return;}
+  navigator.clipboard.writeText(state.transcript).then(()=>toast('Copied','success')).catch(()=>{$('transcriptArea').select();document.execCommand('copy');toast('Copied','success');});
+};
+$('clearBtn').onclick=()=>{state.transcript='';state.segments=[];$('transcriptArea').value='';$('liveSegments').innerHTML='';ustat();slog('Cleared','info');};
+$('searchInput').oninput=function(){
+  const q=this.value.toLowerCase();
+  if(!q){$('transcriptArea').value=state.transcript;return;}
+  if(!state.transcript)return;
+  $('transcriptArea').value=state.transcript.split('\n').filter(l=>l.toLowerCase().includes(q)).join('\n')||'\u2014 No matches \u2014';
+};
+
+// ===== EXPORT =====
+document.querySelectorAll('[data-fmt]').forEach(btn=>{
+  btn.onclick=()=>{
+    const fmt=btn.dataset.fmt,inc=$('tsToggle').checked;
+    if(!state.segments.length&&!state.transcript){toast('Nothing to export','error');return;}
+    let c,m,e;
+    switch(fmt){
+      case'txt':{c=inc&&state.segments.length?state.segments.map(s=>'['+fmtTime(s.start)+'] '+s.text).join('\n'):state.transcript;m='text/plain';e='txt';break;}
+      case'srt':{c=state.segments.map((s,i)=>{const f=t=>{const h=Math.floor(t/3600),m=Math.floor((t%3600)/60),sec=t%60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+sec.toFixed(3).padStart(6,'0').replace('.',',')};return(i+1)+'\n'+f(s.start)+' --> '+f(s.end)+'\n'+s.text+'\n';}).join('');m='text/plain';e='srt';break;}
+      case'vtt':{c='WEBVTT\n\n'+state.segments.map(s=>{const f=t=>{const h=Math.floor(t/3600),m=Math.floor((t%3600)/60),sec=t%60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+sec.toFixed(3).padStart(6,'0')};return f(s.start)+' --> '+f(s.end)+'\n'+s.text+'\n';}).join('');m='text/vtt';e='vtt';break;}
+      case'json':{c=JSON.stringify({name:state.fileName||'transcript',duration:state.audioDuration,segments:state.segments,text:state.transcript,exportedAt:new Date().toISOString()},null,2);m='application/json';e='json';break;}
+      case'pdf':{const w=window.open('');if(w){const t=inc&&state.segments.length?state.segments.map(s=>'['+fmtTime(s.start)+'] '+s.text).join('\n'):state.transcript;w.document.write('<pre style="font:12px/1.6 system-ui,sans-serif;white-space:pre-wrap;max-width:700px;margin:40px auto">'+esc(t)+'</pre>');w.document.title=(state.fileName||'transcript')+'.pdf';w.print();}return;}
+      default:return;
+    }
+    const url=URL.createObjectURL(new Blob([c],{type:m}));
+    const a=document.createElement('a');a.href=url;a.download=(state.fileName||'transcript').replace(/\.[^.]+$/,'')+'.'+e;
+    document.body.appendChild(a);a.click();
+    setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},100);
+    toast('Exported .'+e,'success');
+  };
+});
+
+})();
+</script>
+</body>
+</html>
